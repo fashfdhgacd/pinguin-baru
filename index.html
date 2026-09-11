@@ -25,6 +25,14 @@
   </div></header>
   <div id="app" class="wrap"></div>
   <footer class="foot"><div class="wrap">Dr. Pinguin · 18+</div></footer>
+    <script>
+    (function () {
+      var m = location.pathname.match(/^\/v\/([^\/?#]+)/);
+      if (m && !(location.hash || "").match(/^#\/v\//)) {
+        location.replace("/#/v/" + decodeURIComponent(m[1]));
+      }
+    })();
+  </script>
   <script src="./app.js"></script>
 </body>
 </html>
