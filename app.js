@@ -1,10 +1,11 @@
 (function () {
   var ALL = [];
-  var CATS = ["JAV","Amatir","Jilbab","STW","Viral","Colmek","Tobrut","Live","Series","Film","Lulu","Streamtape","Umum"];
+  var CATS = ["JAV","Videy","Amatir","Jilbab","STW","Viral","Colmek","Tobrut","Live","Series","Film","Lulu","Streamtape","Umum"];
   var FEEDS = [
     "https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/videos.json",
     "https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/putarin.json",
-    "https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/campur.json"
+    "https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/campur.json",
+    "https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/videy.json"
   ];
   function esc(s){ return String(s||"").replace(/[&<>"]/g, function(c){ return ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[c]; }); }
   function embedOf(v){ return String((v && (v.embed || v.direct || v.e)) || "").replace("/d/", "/e/"); }
@@ -19,6 +20,7 @@
   function catOf(v){
     var raw = embedOf(v), t = titleOf(v), c = String((v && (v.category || v.folder)) || "").trim();
     if (c && !/^(putarin|campur|mix|pilihan|lainnya)$/i.test(c)) return c;
+    if (/videy/i.test(raw+" "+c+" "+t)) return "Videy";
     if (/lulu/i.test(raw)) return "Lulu";
     if (/streamtape|strcloud/i.test(raw)) return "Streamtape";
     if (/putarin|puterin|\bjav\b|[a-z]{2,6}-\d{3}/i.test(raw+" "+t)) return "JAV";
@@ -26,14 +28,19 @@
   }
   function hostOf(v){
     var raw = embedOf(v);
+    if (/videy/i.test(raw)) return "videy";
     if (/indoav/i.test(raw)) return "indoav";
     if (/userbokep/i.test(raw)) return "userbokep";
+    if (/putarin|puterin/i.test(raw)) return "putarin";
     if (/lulu/i.test(raw)) return "lulu";
     if (/streamtape|strcloud/i.test(raw)) return "streamtape";
     return "x";
   }
   function posterOf(v){
-    return "/api/thumb?h=" + encodeURIComponent(hostOf(v)) + "&id=" + encodeURIComponent(idOf(v));
+    var id = idOf(v), h = hostOf(v);
+    if (h === "putarin") return "/api/poster?id=" + encodeURIComponent(id);
+    if (h === "lulu") return "/p/" + encodeURIComponent(id) + ".jpg";
+    return "/api/thumb?h=" + encodeURIComponent(h) + "&id=" + encodeURIComponent(id);
   }
   function route(){
     var h = location.hash || "#/";
@@ -101,8 +108,8 @@
   Promise.all(FEEDS.map(function(u){ return fetch(u).then(function(r){ return r.ok?r.json():[]; }).catch(function(){ return []; }); }))
     .then(function(pack){
       var seen={};
-      ALL=[].concat(pack[0]||[],pack[1]||[],pack[2]||[]).filter(function(v){
-        var id=idOf(v); if(!id||/videy/i.test(embedOf(v))||seen[id]) return false; seen[id]=1; return true;
+      ALL=[].concat(pack[0]||[],pack[1]||[],pack[2]||[],pack[3]||[]).filter(function(v){
+        var id=idOf(v); if(!id||seen[id]) return false; seen[id]=1; return true;
       });
       render();
     });
