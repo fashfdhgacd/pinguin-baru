@@ -1,0 +1,16 @@
+let cache={t:0,list:[]};
+async function catalog(){
+  if(cache.list.length&&Date.now()-cache.t<10*60*1000)return cache.list;
+  const urls=["https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/putarin.json","https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/videos.json","https://cdn.jsdelivr.net/gh/fashfdhgacd/koleksi-dr-pinguin@main/data/campur.json"];
+  const out=[];
+  for(const u of urls){try{const r=await fetch(u,{cache:"no-store"});const d=await r.json();if(Array.isArray(d))out.push.apply(out,d);}catch(_){}}
+  cache={t:Date.now(),list:out};return out;
+}
+function keyOf(v){const u=String((v&&(v.embed||v.direct||v.id||""))||"");const m=u.match(/[?&]id=([A-Za-z0-9_-]+)/)||u.match(/\/(?:e|v|d)\/([A-Za-z0-9_-]+)/);return m?m[1]:""}
+function dead(u){return !u||/embedan\.com|cdnhlsplayer\.lat|logo\.png$/i.test(String(u))}
+function javCovers(title){const m=String(title||"").toUpperCase().match(/\b([A-Z]{2,7})-?(\d{3,4})\b/);if(!m)return[];const maker=m[1].toLowerCase(),n3=m[2].padStart(3,"0"),n5=m[2].padStart(5,"0"),keys=[maker+n5,"1"+maker+n5,maker+n3],out=[];keys.forEach(function(k){out.push("https://pics.dmm.co.jp/digital/video/"+k+"/"+k+"pl.jpg");out.push("https://pics.dmm.co.jp/digital/video/"+k+"/"+k+"ps.jpg")});return out}
+async function scrapeImages(id){const pages=["https://puterin.biz/v/"+id,"https://puterin.biz/e/"+id];const found=[];for(const url of pages){try{const r=await fetch(url,{headers:{"user-agent":"Mozilla/5.0"}});if(!r.ok)continue;const html=await r.text();[ /property=["']og:image["']\s+content=["']([^"']+)["']/i, /poster=["'](https:\/\/[^"']+)["']/i, /(https:\/\/pics\.dmm\.co\.jp\/digital\/video\/[^"' ]+\.jpg)/i ].forEach(function(p){const m=html.match(p);if(m&&m[1]&&!dead(m[1]))found.push(m[1])});}catch(_){}}return found}
+async function sendImage(res,url){if(dead(url))return false;try{const r=await fetch(url,{headers:{"user-agent":"Mozilla/5.0",accept:"image/*"},redirect:"follow"});if(!r.ok)return false;const buf=Buffer.from(await r.arrayBuffer());if(buf.length<200)return false;let ct="image/jpeg";if(buf[0]===0x52)ct="image/webp";else if(buf[0]===0x89)ct="image/png";res.setHeader("Content-Type",ct);res.setHeader("Cache-Control","public, s-maxage=604800, stale-while-revalidate=2592000");res.status(200).end(buf);return true}catch(_){return false}}
+const PLACEHOLDER=Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#141414"/><circle cx="320" cy="180" r="36" fill="#ff9000"/><polygon points="310,164 342,180 310,196" fill="#111"/></svg>');
+module.exports=async function handler(req,res){try{const id=String((req.query&&req.query.id)||"").replace(/[^A-Za-z0-9_-]/g,"");if(id){const list=await catalog();const video=list.find(function(v){return keyOf(v).toLowerCase()===id.toLowerCase()});const title=video&&video.title?video.title:"";const localPoster=video&&(video.poster||video.thumb||video.thumbnail);const candidates=[].concat(javCovers(title),dead(localPoster)?[]:[localPoster],await scrapeImages(id));for(let i=0;i<candidates.length;i++){if(await sendImage(res,candidates[i]))return}}}catch(_){}
+res.setHeader("Content-Type","image/svg+xml;charset=utf-8");res.status(200).end(PLACEHOLDER)}
