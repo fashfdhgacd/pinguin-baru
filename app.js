@@ -33,7 +33,7 @@
     return "x";
   }
   function posterOf(v){
-    return "/.netlify/functions/thumb?h=" + encodeURIComponent(hostOf(v)) + "&id=" + encodeURIComponent(idOf(v));
+    return "/api/thumb?h=" + encodeURIComponent(hostOf(v)) + "&id=" + encodeURIComponent(idOf(v));
   }
   function route(){
     var h = location.hash || "#/";
@@ -56,7 +56,7 @@
     return "#/" + (p.length?"?"+p.join("&"):"");
   }
   function card(v){
-    return '<a class="card" href="#/v/'+encodeURIComponent(idOf(v))+'"><div class="ph"><img src="'+esc(posterOf(v))+'" alt="" loading="lazy"><span class="tag">'+esc(catOf(v))+'</span></div><h3>'+esc(titleOf(v))+'</h3></a>';
+    return '<a class="card" href="#/v/'+encodeURIComponent(idOf(v))+'"><div class="ph"><img src="'+esc(posterOf(v))+'" alt="" loading="lazy"><span class="tag">'+esc(catOf(v))+'</span><span class="play"><i>▶</i></span></div><h3>'+esc(titleOf(v))+'</h3></a>';
   }
   function filtered(cat,q){
     return ALL.filter(function(v){
