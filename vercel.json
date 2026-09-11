@@ -1,0 +1,23 @@
+{
+  "framework": null,
+  "buildCommand": "",
+  "installCommand": "",
+  "redirects": [
+    { "source": "/putarin", "destination": "/?cat=jav", "permanent": true },
+    { "source": "/putarin/", "destination": "/?cat=jav", "permanent": true },
+    { "source": "/campur", "destination": "/", "permanent": true },
+    { "source": "/campur/", "destination": "/", "permanent": true },
+    { "source": "/mix", "destination": "/", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/privasi", "destination": "/privasi.html" },
+    { "source": "/syarat", "destination": "/syarat.html" },
+    { "source": "/dmca", "destination": "/dmca.html" },
+    { "source": "/kontak", "destination": "/kontak.html" },
+    { "source": "/p/:id.jpg", "destination": "/api/thumb?h=x&id=:id" },
+    { "source": "/p/:id", "destination": "/api/thumb?h=x&id=:id" },
+    { "source": "/v/:id", "destination": "/api/watch?id=:id" },
+    { "source": "/v/:id/", "destination": "/api/watch?id=:id" },
+    { "source": "/sitemap-v.xml", "destination": "/api/sitemap-v" }
+  ]
+}
