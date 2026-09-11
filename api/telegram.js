@@ -38,10 +38,11 @@ async function reply(env, chatId, text, keyboard) {
   });
 }
 function keyOf(u) {
-  const m = String(u || "").match(/[?&]id=([A-Za-z0-9_-]+)/) || String(u || "").match(/\/(?:e|v|d)\/([A-Za-z0-9_-]+)/);
+  const s = String(u || "");
+  const m = s.match(/[?&]id=([A-Za-z0-9_-]+)/) || s.match(/\/(?:e|v|d)\/([A-Za-z0-9_-]+)/) || s.match(/lulu(?:vdo|stream|vid)\.com\/([A-Za-z0-9_-]+)/i);
   return m ? m[1] : "";
 }
-function toItem(url) {
+function toItem(url, titleHint) {
   const low = url.toLowerCase();
   let category = "Amatir", source = "Telegram", embed = url, direct = url;
   const id = keyOf(url);
@@ -66,7 +67,10 @@ function toItem(url) {
     category = "Amatir"; source = "Userbokep";
     embed = "https://tv1.userbokep.com/e/" + id; direct = embed;
   }
-  return { title: category + " " + id, direct: direct, embed: embed, source: source, category: category, tags: ["telegram"], date: new Date().toISOString().slice(0, 10) };
+  let title = String(titleHint || "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+  if (/\bai\b/i.test(title)) category = "AI";
+  if (!title) title = category + " " + id;
+  return { title: title, direct: direct, embed: embed, source: source, category: category, tags: ["telegram"].concat(/\bai\b/i.test(title) ? ["ai"] : []), date: new Date().toISOString().slice(0, 10) };
 }
 function parseItems(text) {
   const items = [];
@@ -79,15 +83,15 @@ function parseItems(text) {
     if (m) {
       const url = m[0].replace(/[).,]+$/, "");
       if (blocked(url) || !allowed(url)) continue;
-      const it = toItem(url);
-      if (pending) it.title = pending.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
+      const same = line.replace(m[0], " ").trim();
+      const it = toItem(url, same || pending);
       items.push(it); pending = "";
     } else if (!line.startsWith("/")) pending = line;
   }
   return items;
 }
 function pathOf(it) {
-  const u = String(it.embed || "");
+  const u = String(it.embed || "") + " " + String(it.category || "");
   if (/puterin|putarin/.test(u)) return "data/putarin.json";
   if (/lulu|streamtape|strcloud/.test(u)) return "data/campur.json";
   if (/videy/.test(u)) return "data/videy.json";
@@ -103,16 +107,23 @@ async function mergeAndPush(env, path, add) {
   const file = await ghGet(env, path);
   const list = JSON.parse(Buffer.from(file.content, "base64").toString("utf8"));
   const seen = {};
-  list.forEach(function (v) { const k = keyOf(v.embed || v.direct); if (k) seen[k] = 1; });
-  let added = 0, skipped = 0;
+  list.forEach(function (v, i) { const k = keyOf(v.embed || v.direct); if (k) seen[k] = i; });
+  let added = 0, updated = 0, skipped = 0;
   add.forEach(function (it) {
     const k = keyOf(it.embed || it.direct);
-    if (!k || seen[k]) { skipped++; return; }
-    seen[k] = 1; list.unshift(it); added++;
+    if (!k) { skipped++; return; }
+    if (seen[k] !== undefined) {
+      const old = list[seen[k]];
+      if (it.title && it.title !== old.title) { old.title = it.title; updated++; }
+      if (it.category) old.category = it.category;
+      old.date = it.date || old.date;
+      return;
+    }
+    seen[k] = 0; list.unshift(it); added++;
   });
-  if (!added) return { added: 0, skipped: skipped };
+  if (!added && !updated) return { added: 0, skipped: skipped, updated: 0 };
   const body = {
-    message: "bot: +" + added + " " + path,
+    message: "bot: +" + added + " upd " + updated + " " + path,
     content: Buffer.from(JSON.stringify(list, null, 2)).toString("base64"),
     sha: file.sha,
     branch: env.GH_BRANCH || "main"
@@ -123,7 +134,7 @@ async function mergeAndPush(env, path, add) {
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error("GH write " + r.status + " " + (await r.text()).slice(0, 180));
-  return { added: added, skipped: skipped };
+  return { added: added, skipped: skipped, updated: updated };
 }
 async function handleShare(env, chatId, n, cat) {
   n = Math.max(1, Math.min(30, n || 10));
@@ -141,13 +152,13 @@ async function handleShare(env, chatId, n, cat) {
     const u = String(v.embed || v.direct || "");
     if (blocked(u)) return false;
     if (cat === "amatir") return String(v.category || "").toLowerCase() === "amatir";
-    if (cat && cat !== "all") return (u + " " + String(v.category || "")).toLowerCase().indexOf(cat) >= 0;
+    if (cat && cat !== "all") return (u + " " + String(v.category || "") + " " + String(v.title || "")).toLowerCase().indexOf(cat) >= 0;
     return true;
   });
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }
   const host = env.PUBLIC_HOST.replace(/\/$/, "");
   const take = pool.slice(0, n).map(function (v) {
-    return "▶ " + String(v.title || "Video") + "\n" + host + "/#/v/" + keyOf(v.embed || v.direct);
+    return "\u25b6 " + String(v.title || "Video") + "\n" + host + "/#/v/" + keyOf(v.embed || v.direct);
   });
   await reply(env, chatId, take.join("\n\n") || "Kosong.");
 }
@@ -160,11 +171,11 @@ async function handleUpdate(update, env) {
   const fromId = String((msg.from && msg.from.id) || "");
   if (allowedId && fromId && fromId !== allowedId && String(chatId) !== allowedId) { await reply(env, chatId, "Akses ditolak."); return; }
   const t = text.toLowerCase();
-  if (t === "/start" || t === "menu" || t === "/menu") { await reply(env, chatId, "Bot hidup. Kirim link atau Minta 10."); return; }
+  if (t.startsWith("/start") || t === "menu" || t === "/menu") { await reply(env, chatId, "Bot hidup. Kirim link atau Minta 10."); return; }
   if (/^minta\s*10$/.test(t) || t === "10") { await handleShare(env, chatId, 10, "all"); return; }
   if (/^minta\s*25$/.test(t) || t === "25" || t === "lagi") { await handleShare(env, chatId, 25, "all"); return; }
   if (t === "semua") { await handleShare(env, chatId, 10, "all"); return; }
-  if (t === "amatir" || t === "videy" || t === "lulu" || t === "putarin") { await handleShare(env, chatId, 10, t); return; }
+  if (t === "amatir" || t === "videy" || t === "lulu" || t === "putarin" || t === "ai") { await handleShare(env, chatId, 10, t); return; }
   const items = parseItems(text);
   if (!items.length) { await reply(env, chatId, "Kirim link IndoAV / UserBokep / Videy / Lulu / Putarin / Streamtape."); return; }
   if (!env.GH_TOKEN) { await reply(env, chatId, "Upload butuh GH_TOKEN di Vercel."); return; }
@@ -174,7 +185,7 @@ async function handleUpdate(update, env) {
   const keys = Object.keys(groups);
   for (let i = 0; i < keys.length; i++) {
     const r = await mergeAndPush(env, keys[i], groups[keys[i]]);
-    lines.push(keys[i] + ": +" + r.added + " skip " + r.skipped);
+    lines.push(keys[i] + ": +" + r.added + " upd " + (r.updated || 0) + " skip " + r.skipped);
   }
   try { lines.push("poster +" + await hookPoster(env, items)); } catch (e) { lines.push("poster: " + String(e.message || e)); }
   await reply(env, chatId, lines.join("\n"));
