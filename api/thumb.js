@@ -1,7 +1,7 @@
 let cache = { t: 0, map: {} };
 
 async function loadMaps() {
-  if (cache.map && Object.keys(cache.map).length && Date.now() - cache.t < 3 * 60 * 1000) {
+  if (cache.map && Object.keys(cache.map).length && Date.now() - cache.t < 2 * 60 * 1000) {
     return cache.map;
   }
   const base = "https://raw.githubusercontent.com/fashfdhgacd/koleksi-dr-pinguin/main/data/";
@@ -9,7 +9,7 @@ async function loadMaps() {
   const files = ["latest-posters.json", "posters.json"];
   for (let i = 0; i < files.length; i++) {
     try {
-      const r = await fetch(base + files[i], { cache: "no-store" });
+      const r = await fetch(base + files[i] + "?t=" + Date.now(), { cache: "no-store" });
       if (!r.ok) continue;
       const d = await r.json();
       if (d && typeof d === "object" && !Array.isArray(d)) Object.assign(map, d);
@@ -23,9 +23,18 @@ function isLulu(host) {
   return /^(lulu|luluvdo|lulustream|ll|x|cdn)$/i.test(String(host || ""));
 }
 
+function redirect(res, url) {
+  res.writeHead(302, {
+    Location: url,
+    "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400"
+  });
+  res.end();
+  return true;
+}
+
 async function fetchText(url, ms) {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const t = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, ms || 7000) : null;
+  const t = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, ms || 6000) : null;
   try {
     const r = await fetch(url, {
       headers: {
@@ -53,13 +62,12 @@ function extractPoster(html) {
     /content=["'](https?:\/\/[^"']+)["']\s+property=["']og:image["']/i,
     /https:\/\/(?:i|a)\.embedan\.com\/image\/[^\s"'<>]+/i,
     /https:\/\/img\.lulucdn\.com\/[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)/i,
-    /https:\/\/thumb\.tapecontent\.net\/thumb\/[^\s"'<>]+/i,
-    /https:\/\/[^"'<>\s]+\/(?:poster|thumb|splash|cover)[^"'<>\s]*\.(?:jpg|jpeg|png|webp)/i
+    /https:\/\/thumb\.tapecontent\.net\/thumb\/[^\s"'<>]+/i
   ];
   for (let i = 0; i < patterns.length; i++) {
     const m = html.match(patterns[i]);
     if (m) {
-      const u = (m[1] || m[0] || "").replace(/&/g, "&").trim();
+      const u = (m[1] || m[0] || "").replace(/&amp;/g, "&").trim();
       if (u && /^https?:\/\//i.test(u) && !/logo\.png$/i.test(u)) return u;
     }
   }
@@ -80,7 +88,7 @@ async function scrape(host, id) {
   const bases = allow[String(host || "").toLowerCase()] || [];
   if (!bases.length || !id) return "";
   for (let i = 0; i < bases.length; i++) {
-    const html = await fetchText(bases[i] + id, 7000);
+    const html = await fetchText(bases[i] + id, 6000);
     const url = extractPoster(html);
     if (url) return url;
   }
@@ -89,8 +97,9 @@ async function scrape(host, id) {
 
 async function sendImage(res, url, referer) {
   if (!url || !/^https?:\/\//i.test(url)) return false;
+  if (/embedan\.com/i.test(url)) return redirect(res, url);
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const t = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, 8000) : null;
+  const t = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (_) {} }, 7000) : null;
   try {
     const r = await fetch(url, {
       headers: {
@@ -144,7 +153,17 @@ module.exports = async function handler(req, res) {
     try {
       const map = await loadMaps();
       const mapped = map[id];
-      if (mapped && (await sendImage(res, mapped, "https://tv1.userbokep.com/"))) return;
+      if (mapped) {
+        if (/embedan\.com/i.test(mapped)) {
+          redirect(res, mapped);
+          return;
+        }
+        if (await sendImage(res, mapped, "https://tv1.userbokep.com/")) return;
+        if (/^https?:\/\//i.test(mapped)) {
+          redirect(res, mapped);
+          return;
+        }
+      }
     } catch (_) {}
 
     if (isLulu(host) || host === "x") {
@@ -157,22 +176,20 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    if (host) {
+    const hostsToTry = host ? [host] : ["userbokep", "indoav"];
+    if (host && host !== "userbokep" && host !== "indoav") hostsToTry.push("userbokep", "indoav");
+    for (let i = 0; i < hostsToTry.length; i++) {
       try {
-        const scraped = await scrape(host, id);
-        if (scraped && (await sendImage(res, scraped, isLulu(host) ? "https://luluvdo.com/" : "https://tv1.userbokep.com/"))) {
+        const scraped = await scrape(hostsToTry[i], id);
+        if (!scraped) continue;
+        if (/embedan\.com/i.test(scraped)) {
+          redirect(res, scraped);
           return;
         }
+        if (await sendImage(res, scraped, "https://tv1.userbokep.com/")) return;
+        redirect(res, scraped);
+        return;
       } catch (_) {}
-    }
-
-    if (!host || host === "x") {
-      for (const h of ["userbokep", "indoav"]) {
-        try {
-          const scraped = await scrape(h, id);
-          if (scraped && (await sendImage(res, scraped, "https://tv1.userbokep.com/"))) return;
-        } catch (_) {}
-      }
     }
   } catch (_) {}
   placeholder(res);
