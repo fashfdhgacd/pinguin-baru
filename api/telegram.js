@@ -209,8 +209,7 @@ async function handleShare(env, chatId, n, cat) {
   const take = pool.slice(0, n).map(function (v) {
     return "\u25b6 " + String(v.title || "Video") + "\n" + host + "/#/v/" + keyOf(v.embed || v.direct);
   });
-  const label = cat && cat !== "all" ? " (" + cat + ")" : "";
-  await reply(env, chatId, (take.length ? take.join("\n\n") : "Kosong.") + (take.length ? "\n\n—" + take.length + " video" + label : ""));
+  await reply(env, chatId, take.length ? take.join("\n\n") : "Kosong.");
 }
 async function handleUpdate(update, env) {
   const msg = update.message || update.channel_post;
