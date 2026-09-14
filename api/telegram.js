@@ -22,7 +22,7 @@ const MENU = { keyboard: [[{ text: "Terbaru" }, { text: "Minta 10" }, { text: "M
 module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
   const env = getEnv();
-  if (req.method === "GET") return res.status(200).json({ ok: true, service: "telegram-webhook", ready: Boolean(env.BOT_TOKEN), hasBot: Boolean(env.BOT_TOKEN), hasGh: Boolean(env.GH_TOKEN), host: env.PUBLIC_HOST });
+  if (req.method === "GET") return res.status(200).json({ ok: true, service: "telegram-webhook", ready: Boolean(env.BOT_TOKEN), hasBot: Boolean(env.BOT_TOKEN), hasGh: Boolean(env.GH_TOKEN), host: env.PUBLIC_HOST, hosts: ["https://www.koleksidrpinguin.com", "https://www.koleksidrpinguin.site"] });
   if (req.method !== "POST") return res.status(405).json({ ok: false });
   const update = typeof req.body === "string" ? (function () { try { return JSON.parse(req.body); } catch (e) { return {}; } }()) : (req.body || {});
   try {
@@ -205,9 +205,9 @@ async function handleShare(env, chatId, n, cat) {
     }
   }
 
-  const host = env.PUBLIC_HOST.replace(/\/$/, "");
   const take = pool.slice(0, n).map(function (v) {
-    return "\u25b6 " + String(v.title || "Video") + "\n" + host + "/#/v/" + keyOf(v.embed || v.direct);
+    const id = keyOf(v.embed || v.direct);
+    return "\u25b6 " + String(v.title || "Video") + "\nhttps://www.koleksidrpinguin.com/v/" + id + "\nhttps://www.koleksidrpinguin.site/#/v/" + id;
   });
   await reply(env, chatId, take.length ? take.join("\n\n") : "Kosong.");
 }
